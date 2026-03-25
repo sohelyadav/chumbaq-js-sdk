@@ -155,6 +155,15 @@ export class Dyplink {
     return this.pushManager.unregisterToken(token);
   }
 
+  /** Track a revenue event and update the user's LTV. */
+  async trackRevenue(amount: number, currency?: string): Promise<void> {
+    return this.identityManager.trackRevenue(
+      this._deviceFingerprint,
+      amount,
+      currency,
+    );
+  }
+
   /** Reset the identity — generates new anonymous ID. */
   reset(): void {
     this._identifiedId = null;
