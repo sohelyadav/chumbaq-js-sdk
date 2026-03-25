@@ -3,12 +3,30 @@ import { BannerRenderer } from './banner';
 import { DeferredDeepLink, DeferredMatchResult } from './deferred';
 import { IdentityManager, IdentifyParams, IdentifyResult } from './identity';
 import { PushManager, PushRegistrationResult } from './push';
+import { EventTracker } from './events';
 
 export interface DyplinkConfig {
   baseUrl: string;
   apiKey: string;
   projectId: string;
+  /** Auto-detect platform. Defaults to 'web'. */
+  platform?: string;
 }
+
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+const STORAGE_KEY_ANON_ID = 'dyplink_anonymous_id';
+const STORAGE_KEY_FINGERPRINT = 'dyplink_device_fp';
+const COOKIE_NAME = 'dyplink_did';
 
 export class Dyplink {
   private tracker: Tracker;
@@ -16,15 +34,66 @@ export class Dyplink {
   private deferred: DeferredDeepLink;
   private identityManager: IdentityManager;
   private pushManager: PushManager;
+  private eventTracker: EventTracker;
   private config: DyplinkConfig;
+
+  private _anonymousId: string;
+  private _identifiedId: string | null = null;
+  private _deviceFingerprint: string;
+  private _platform: string;
+  private _initialized = false;
 
   constructor(config: DyplinkConfig) {
     this.config = config;
+    this._platform = config.platform || 'web';
     this.tracker = new Tracker(config.baseUrl, config.apiKey);
     this.banner = new BannerRenderer(config.baseUrl, config.projectId);
     this.deferred = new DeferredDeepLink(config.baseUrl, config.apiKey);
     this.identityManager = new IdentityManager(config.baseUrl, config.apiKey, config.projectId);
     this.pushManager = new PushManager(config.baseUrl, config.apiKey, config.projectId);
+    this.eventTracker = new EventTracker(config.baseUrl, config.apiKey, config.projectId);
+
+    // Restore or generate anonymous ID and device fingerprint
+    this._anonymousId = this.getStorageItem(STORAGE_KEY_ANON_ID) || generateUUID();
+    this._deviceFingerprint = this.getStorageItem(STORAGE_KEY_FINGERPRINT) || generateUUID();
+    this.setStorageItem(STORAGE_KEY_ANON_ID, this._anonymousId);
+    this.setStorageItem(STORAGE_KEY_FINGERPRINT, this._deviceFingerprint);
+  }
+
+  /** Initialize the SDK — registers the anonymous device and sets the tracking cookie. */
+  async init(): Promise<void> {
+    if (this._initialized) return;
+    this._initialized = true;
+
+    // Set cookie for server-side click attribution
+    this.setCookie(COOKIE_NAME, this._deviceFingerprint, 365);
+
+    // Register anonymous identity
+    await this.identityManager.identify({
+      deviceFingerprint: this._deviceFingerprint,
+      platform: this._platform,
+      distinctId: this._anonymousId,
+    });
+  }
+
+  /** Get the current distinct ID (anonymous or identified). */
+  get distinctId(): string {
+    return this._identifiedId || this._anonymousId;
+  }
+
+  /** Get the device fingerprint. */
+  get deviceFingerprint(): string {
+    return this._deviceFingerprint;
+  }
+
+  /** Track a custom event. */
+  async track(eventName: string, properties?: Record<string, unknown>): Promise<void> {
+    return this.eventTracker.track(
+      eventName,
+      this.distinctId,
+      this._deviceFingerprint,
+      properties,
+    );
   }
 
   async trackConversion(options: TrackOptions): Promise<void> {
@@ -47,21 +116,77 @@ export class Dyplink {
     return this.deferred.match(params);
   }
 
+  /**
+   * Identify the user. If transitioning from anonymous to identified,
+   * merges the anonymous event history with the identified user.
+   */
   async identify(params: IdentifyParams): Promise<IdentifyResult> {
-    return this.identityManager.identify(params);
+    const previousDistinctId = this.distinctId;
+    const newDistinctId = params.distinctId || params.externalUserId;
+
+    const result = await this.identityManager.identify({
+      ...params,
+      deviceFingerprint: params.deviceFingerprint || this._deviceFingerprint,
+      platform: params.platform || this._platform,
+    });
+
+    // If transitioning from anonymous to identified, merge histories
+    if (newDistinctId && previousDistinctId !== newDistinctId) {
+      this._identifiedId = newDistinctId;
+      await this.identityManager.merge(previousDistinctId, newDistinctId);
+    }
+
+    return result;
   }
 
   async registerPushToken(params: {
-    deviceFingerprint: string;
+    deviceFingerprint?: string;
     token: string;
     platform: 'ios' | 'android' | 'web';
     provider?: 'fcm' | 'apns';
   }): Promise<PushRegistrationResult> {
-    return this.pushManager.registerToken(params);
+    return this.pushManager.registerToken({
+      ...params,
+      deviceFingerprint: params.deviceFingerprint || this._deviceFingerprint,
+    });
   }
 
   async unregisterPushToken(token: string): Promise<void> {
     return this.pushManager.unregisterToken(token);
+  }
+
+  /** Reset the identity — generates new anonymous ID. */
+  reset(): void {
+    this._identifiedId = null;
+    this._anonymousId = generateUUID();
+    this.setStorageItem(STORAGE_KEY_ANON_ID, this._anonymousId);
+  }
+
+  private getStorageItem(key: string): string | null {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        return localStorage.getItem(key);
+      }
+    } catch { /* SSR/node env */ }
+    return null;
+  }
+
+  private setStorageItem(key: string, value: string): void {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(key, value);
+      }
+    } catch { /* SSR/node env */ }
+  }
+
+  private setCookie(name: string, value: string, days: number): void {
+    try {
+      if (typeof document !== 'undefined') {
+        const d = new Date();
+        d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+        document.cookie = `${name}=${value};expires=${d.toUTCString()};path=/;SameSite=Lax`;
+      }
+    } catch { /* SSR/node env */ }
   }
 }
 
@@ -70,4 +195,5 @@ export { BannerRenderer, BannerConfig } from './banner';
 export { DeferredDeepLink, DeferredMatchResult } from './deferred';
 export { IdentityManager, IdentifyParams, IdentifyResult } from './identity';
 export { PushManager, PushRegistrationResult } from './push';
+export { EventTracker, TrackEventOptions } from './events';
 export default Dyplink;
