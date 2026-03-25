@@ -52,4 +52,23 @@ export class IdentityManager {
     const result = await response.json();
     return result.data || result;
   }
+
+  async merge(anonymousId: string, identifiedId: string): Promise<void> {
+    try {
+      await fetch(`${this.baseUrl}/api/identity/merge`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': this.apiKey,
+        },
+        body: JSON.stringify({
+          projectId: this.projectId,
+          anonymousId,
+          identifiedId,
+        }),
+      });
+    } catch {
+      // Silently fail for merge
+    }
+  }
 }
