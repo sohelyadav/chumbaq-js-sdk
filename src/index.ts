@@ -4,6 +4,7 @@ import { DeferredDeepLink, DeferredMatchResult } from './deferred';
 import { IdentityManager, IdentifyParams, IdentifyResult } from './identity';
 import { PushManager, PushRegistrationResult } from './push';
 import { EventTracker } from './events';
+import { InAppMessageManager, InAppMessage, MessageAction, MessageCallback, ActionCallback } from './in-app-messages';
 
 export interface DyplinkConfig {
   baseUrl: string;
@@ -35,6 +36,7 @@ export class Dyplink {
   private identityManager: IdentityManager;
   private pushManager: PushManager;
   private eventTracker: EventTracker;
+  private _inAppMessages: InAppMessageManager;
   private config: DyplinkConfig;
 
   private _anonymousId: string;
@@ -58,6 +60,14 @@ export class Dyplink {
     this._deviceFingerprint = this.getStorageItem(STORAGE_KEY_FINGERPRINT) || generateUUID();
     this.setStorageItem(STORAGE_KEY_ANON_ID, this._anonymousId);
     this.setStorageItem(STORAGE_KEY_FINGERPRINT, this._deviceFingerprint);
+
+    this._inAppMessages = new InAppMessageManager(
+      config.baseUrl,
+      config.apiKey,
+      config.projectId,
+      this._deviceFingerprint,
+      this._anonymousId,
+    );
   }
 
   /** Initialize the SDK — registers the anonymous device and sets the tracking cookie. */
@@ -74,6 +84,20 @@ export class Dyplink {
       platform: this._platform,
       distinctId: this._anonymousId,
     });
+
+    // Start in-app message polling and check on app open
+    this._inAppMessages.checkOnAppOpen();
+    this._inAppMessages.startPolling(60000);
+  }
+
+  /** Access the in-app message manager for advanced configuration. */
+  get inAppMessages(): InAppMessageManager {
+    return this._inAppMessages;
+  }
+
+  /** Notify the SDK of a screen change — triggers screen-based in-app messages. */
+  setScreen(screenName: string): void {
+    this._inAppMessages.setScreen(screenName);
   }
 
   /** Get the current distinct ID (anonymous or identified). */
@@ -134,6 +158,7 @@ export class Dyplink {
     if (newDistinctId && previousDistinctId !== newDistinctId) {
       this._identifiedId = newDistinctId;
       await this.identityManager.merge(previousDistinctId, newDistinctId);
+      this._inAppMessages.setDistinctId(newDistinctId);
     }
 
     return result;
@@ -205,4 +230,5 @@ export { DeferredDeepLink, DeferredMatchResult } from './deferred';
 export { IdentityManager, IdentifyParams, IdentifyResult } from './identity';
 export { PushManager, PushRegistrationResult } from './push';
 export { EventTracker, TrackEventOptions } from './events';
+export { InAppMessageManager, InAppMessage, MessageAction, MessageCallback, ActionCallback } from './in-app-messages';
 export default Dyplink;
