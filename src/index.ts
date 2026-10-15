@@ -1,6 +1,6 @@
 import { Tracker, TrackOptions } from './tracker';
-import { BannerRenderer } from './banner';
-import { DeferredDeepLink, DeferredMatchResult } from './deferred';
+import { BannerPosition, BannerRenderer } from './banner';
+import { DeferredDeepLink, DeferredFingerprint, DeferredMatchResult } from './deferred';
 import { IdentityManager, IdentifyParams, IdentifyResult } from './identity';
 import { PushManager, PushRegistrationResult } from './push';
 import { EventTracker } from './events';
@@ -49,7 +49,7 @@ export class Dyplink {
     this.config = config;
     this._platform = config.platform || 'web';
     this.tracker = new Tracker(config.baseUrl, config.apiKey);
-    this.banner = new BannerRenderer(config.baseUrl, config.projectId);
+    this.banner = new BannerRenderer(config.baseUrl, config.apiKey);
     this.deferred = new DeferredDeepLink(config.baseUrl, config.apiKey);
     this.identityManager = new IdentityManager(config.baseUrl, config.apiKey, config.projectId);
     this.pushManager = new PushManager(config.baseUrl, config.apiKey, config.projectId);
@@ -124,9 +124,15 @@ export class Dyplink {
     return this.tracker.trackConversion(options);
   }
 
-  async showBanner(): Promise<void> {
-    await this.banner.load();
-    this.banner.render();
+  /**
+   * Loads a banner widget and renders it as a strip.
+   *
+   * `widgetId` is a banner category from the dashboard: a project can have
+   * several, for different placements, so there is no single "the banner".
+   */
+  async showBanner(widgetId: string, position: BannerPosition = 'bottom'): Promise<void> {
+    await this.banner.load(widgetId);
+    this.banner.render(position);
   }
 
   dismissBanner(): void {
@@ -134,7 +140,7 @@ export class Dyplink {
   }
 
   async matchDeferredDeepLink(params?: {
-    deviceFingerprint?: string;
+    deviceFingerprint?: string | DeferredFingerprint;
     platform?: string;
   }): Promise<DeferredMatchResult> {
     return this.deferred.match(params);
@@ -225,8 +231,8 @@ export class Dyplink {
 }
 
 export { Tracker, TrackOptions } from './tracker';
-export { BannerRenderer, BannerConfig } from './banner';
-export { DeferredDeepLink, DeferredMatchResult } from './deferred';
+export { Banner, BannerPosition, BannerRenderer, BannerWidget } from './banner';
+export { DeferredDeepLink, DeferredFingerprint, DeferredMatchResult } from './deferred';
 export { IdentityManager, IdentifyParams, IdentifyResult } from './identity';
 export { PushManager, PushRegistrationResult } from './push';
 export { EventTracker, TrackEventOptions } from './events';

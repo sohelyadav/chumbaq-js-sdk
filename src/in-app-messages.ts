@@ -150,7 +150,13 @@ export class InAppMessageManager {
 
       if (!response.ok) return;
 
-      const { messages } = await response.json() as { messages: InAppMessage[] };
+      // The API wraps every response in `{ data: … }`. Reading `messages`
+      // off the root finds nothing and looks exactly like "no messages are
+      // eligible", so nothing ever displayed and nothing ever complained.
+      // The `?? root` fallback keeps an unwrapped body working.
+      const root = await response.json() as
+        { data?: { messages?: InAppMessage[] }; messages?: InAppMessage[] };
+      const { messages } = root.data ?? root;
 
       if (messages && messages.length > 0) {
         this.messageQueue.push(...messages);
