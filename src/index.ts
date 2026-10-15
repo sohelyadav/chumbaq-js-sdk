@@ -5,6 +5,8 @@ import { IdentityManager, IdentifyParams, IdentifyResult } from './identity';
 import { PushManager, PushPayloadData, PushRegistrationResult } from './push';
 import { EventTracker } from './events';
 import { InAppMessageManager, InAppMessage, MessageAction, MessageCallback, ActionCallback } from './in-app-messages';
+import { Diagnostics } from './diagnostics';
+import { DeviceIdentityStore } from './device-identity-store';
 
 export interface DyplinkConfig {
   baseUrl: string;
@@ -12,6 +14,12 @@ export interface DyplinkConfig {
   projectId: string;
   /** Auto-detect platform. Defaults to 'web'. */
   platform?: string;
+  /**
+   * Write the SDK's diagnostics to the console. Off by default — see
+   * `Diagnostics` for what lands there and why it is worth turning on while
+   * integrating.
+   */
+  debug?: boolean;
 }
 
 function generateUUID(): string {
@@ -38,6 +46,8 @@ export class Dyplink {
   private eventTracker: EventTracker;
   private _inAppMessages: InAppMessageManager;
   private config: DyplinkConfig;
+  private diagnostics: Diagnostics;
+  private deviceStore: DeviceIdentityStore;
 
   private _anonymousId: string;
   private _identifiedId: string | null = null;
@@ -45,15 +55,31 @@ export class Dyplink {
   private _platform: string;
   private _initialized = false;
 
+  /**
+   * Whether this is a page rather than a worker.
+   *
+   * A window's `_deviceFingerprint` is this device's id — restored from
+   * `localStorage`, or minted here and used by everything else the page
+   * does. A `ServiceWorkerGlobalScope` has no `localStorage` to restore
+   * from, so the id the constructor minted there is a different one on every
+   * activation and means nothing to the server; identity has to come from
+   * the mirror instead. See `resolveReportingIdentity`.
+   */
+  private _inWindow: boolean;
+
+  /** Whether the fingerprint came from, and was written back to, storage. */
+  private _identityIsDurable: boolean;
+
   constructor(config: DyplinkConfig) {
     this.config = config;
     this._platform = config.platform || 'web';
-    this.tracker = new Tracker(config.baseUrl, config.apiKey);
-    this.banner = new BannerRenderer(config.baseUrl, config.apiKey);
-    this.deferred = new DeferredDeepLink(config.baseUrl, config.apiKey);
-    this.identityManager = new IdentityManager(config.baseUrl, config.apiKey, config.projectId);
-    this.pushManager = new PushManager(config.baseUrl, config.apiKey, config.projectId);
-    this.eventTracker = new EventTracker(config.baseUrl, config.apiKey, config.projectId);
+    this.diagnostics = new Diagnostics(config.debug === true);
+    this.tracker = new Tracker(config.baseUrl, config.apiKey, this.diagnostics);
+    this.banner = new BannerRenderer(config.baseUrl, config.apiKey, this.diagnostics);
+    this.deferred = new DeferredDeepLink(config.baseUrl, config.apiKey, this.diagnostics);
+    this.identityManager = new IdentityManager(config.baseUrl, config.apiKey, config.projectId, this.diagnostics);
+    this.pushManager = new PushManager(config.baseUrl, config.apiKey, config.projectId, this.diagnostics);
+    this.eventTracker = new EventTracker(config.baseUrl, config.apiKey, config.projectId, this.diagnostics);
 
     // Restore or generate anonymous ID and device fingerprint
     this._anonymousId = this.getStorageItem(STORAGE_KEY_ANON_ID) || generateUUID();
@@ -61,12 +87,26 @@ export class Dyplink {
     this.setStorageItem(STORAGE_KEY_ANON_ID, this._anonymousId);
     this.setStorageItem(STORAGE_KEY_FINGERPRINT, this._deviceFingerprint);
 
+    this._inWindow = typeof document !== 'undefined';
+    this._identityIsDurable = this.getStorageItem(STORAGE_KEY_FINGERPRINT) === this._deviceFingerprint;
+    this.deviceStore = new DeviceIdentityStore(this.diagnostics);
+
+    // Mirror the id for this origin's service workers, which cannot reach
+    // `localStorage` and so cannot report push engagement without it. Only
+    // a durable id, and only from a page: see `DeviceIdentityStore`. Not
+    // awaited — nothing in a page's own work depends on it, and the reader
+    // is a different context on a later activation.
+    if (this._inWindow && this._identityIsDurable) {
+      void this.deviceStore.write(this._deviceFingerprint);
+    }
+
     this._inAppMessages = new InAppMessageManager(
       config.baseUrl,
       config.apiKey,
       config.projectId,
       this._deviceFingerprint,
       this._anonymousId,
+      this.diagnostics,
     );
   }
 
@@ -75,19 +115,43 @@ export class Dyplink {
     if (this._initialized) return;
     this._initialized = true;
 
+    // A worker calling this would register a new identity on every
+    // activation — it has no `localStorage` to restore the last one from.
+    // Reporting push engagement is all a worker should build the SDK for.
+    if (!this._inWindow) {
+      this.diagnostics.warn('init() outside a window registers a new identity each time it runs; a service worker should only report push engagement');
+    }
+
     // Set cookie for server-side click attribution
     this.setCookie(COOKIE_NAME, this._deviceFingerprint, 365);
 
-    // Register anonymous identity
-    await this.identityManager.identify({
-      deviceFingerprint: this._deviceFingerprint,
-      platform: this._platform,
-      distinctId: this._anonymousId,
-    });
+    // Register anonymous identity. A failure here costs this device its
+    // server-side identity, and with it any segment-targeted message — the
+    // delivery service withholds those when it cannot resolve one — but it
+    // says nothing about whether messages are eligible. It used to take
+    // in-app messaging down with it for the life of the page: `identify`
+    // throws on a 400 or a 401, so the two calls below were never reached
+    // and nothing retried them.
+    let identifyError: unknown;
+    try {
+      await this.identityManager.identify({
+        deviceFingerprint: this._deviceFingerprint,
+        platform: this._platform,
+        distinctId: this._anonymousId,
+      });
+    } catch (error) {
+      identifyError = error;
+      this.diagnostics.warn('the anonymous identity could not be registered; in-app messaging starts anyway', error);
+    }
 
     // Start in-app message polling and check on app open
     this._inAppMessages.checkOnAppOpen();
     this._inAppMessages.startPolling(60000);
+
+    // Still raised, after messaging is running rather than instead of it: a
+    // 401 here is usually a wrong API key, and swallowing it would trade one
+    // silent failure for another.
+    if (identifyError) throw identifyError;
   }
 
   /** Access the in-app message manager for advanced configuration. */
@@ -197,9 +261,17 @@ export class Dyplink {
    * onMessage(messaging, (payload) =>
    *   dyplink.reportPushReceived(payload.data));
    * ```
+   *
+   * Callable from a service worker's push handler too, which is where most
+   * web deliveries actually arrive — identity comes from the mirror there.
+   * See `resolveReportingIdentity` and
+   * `PushManager.reportNotificationReceived`.
    */
   async reportPushReceived(data: PushPayloadData): Promise<void> {
-    return this.pushManager.reportNotificationReceived(data, this._deviceFingerprint);
+    const deviceFingerprint = await this.resolveReportingIdentity('delivery');
+    if (!deviceFingerprint) return;
+
+    return this.pushManager.reportNotificationReceived(data, deviceFingerprint);
   }
 
   /**
@@ -211,7 +283,46 @@ export class Dyplink {
    * ```
    */
   async reportPushClicked(data: PushPayloadData): Promise<string | null> {
-    return this.pushManager.reportNotificationClicked(data, this._deviceFingerprint);
+    const deviceFingerprint = await this.resolveReportingIdentity('tap');
+    // Where the tap should go is the caller's answer either way: navigation
+    // is what the user asked for and analytics must not stand in its way.
+    if (!deviceFingerprint) return this.pushManager.destinationFor(data);
+
+    return this.pushManager.reportNotificationClicked(data, deviceFingerprint);
+  }
+
+  /**
+   * The device id to report push engagement under, or `null` when this
+   * context has none to offer.
+   *
+   * A page answers with its own id. A service worker cannot reach
+   * `localStorage`, so the id its constructor minted is a fresh one per
+   * activation and nothing the server knows about — it reads the id the page
+   * mirrored into IndexedDB instead, which is the same id the page would
+   * have reported and the same one its push token was registered under.
+   *
+   * `null` means the mirror is empty, which happens in exactly two cases: a
+   * browser where IndexedDB cannot be opened, and a device whose page has
+   * not loaded since this version of the SDK shipped. Both refuse rather
+   * than report: a fabricated id is not a smaller error than a missing
+   * report, it is a different device in the dashboard's device list, and the
+   * API would reject it anyway — `PushAnalyticsService.recordEvent` 404s on
+   * a fingerprint with no identity row.
+   */
+  private async resolveReportingIdentity(intent: string): Promise<string | null> {
+    if (this._inWindow) return this._deviceFingerprint;
+
+    const mirrored = await this.deviceStore.read();
+    if (!mirrored) {
+      this.diagnostics.warn(
+        `a push ${intent} cannot be reported from this context: there is no mirrored device identity to report it `
+        + 'under, and reporting under a new one would add a device rather than a delivery. '
+        + 'It will resolve once the page has loaded once with this SDK version.',
+      );
+      return null;
+    }
+
+    return mirrored;
   }
 
   /** Track a revenue event and update the user's LTV. */
@@ -228,6 +339,11 @@ export class Dyplink {
     this._identifiedId = null;
     this._anonymousId = generateUUID();
     this.setStorageItem(STORAGE_KEY_ANON_ID, this._anonymousId);
+
+    // The in-app manager holds its own copy of the distinct ID, and it kept
+    // the one belonging to the user who just logged out — so a campaign
+    // targeted at them was served to whoever used the browser next.
+    this._inAppMessages.reset(this._anonymousId);
   }
 
   private getStorageItem(key: string): string | null {
@@ -258,6 +374,7 @@ export class Dyplink {
   }
 }
 
+export { Diagnostics } from './diagnostics';
 export { Tracker, TrackOptions } from './tracker';
 export { Banner, BannerPosition, BannerRenderer, BannerWidget } from './banner';
 export { DeferredDeepLink, DeferredFingerprint, DeferredMatchResult } from './deferred';

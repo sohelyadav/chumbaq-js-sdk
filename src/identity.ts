@@ -1,3 +1,5 @@
+import { Diagnostics } from './diagnostics';
+
 export interface IdentifyParams {
   deviceFingerprint: string;
   platform: string;
@@ -56,11 +58,18 @@ export class IdentityManager {
   private baseUrl: string;
   private apiKey: string;
   private projectId: string;
+  private diagnostics: Diagnostics;
 
-  constructor(baseUrl: string, apiKey: string, projectId: string) {
+  constructor(
+    baseUrl: string,
+    apiKey: string,
+    projectId: string,
+    diagnostics: Diagnostics = new Diagnostics(),
+  ) {
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;
     this.projectId = projectId;
+    this.diagnostics = diagnostics;
   }
 
   async identify(params: IdentifyParams): Promise<IdentifyResult> {
@@ -149,8 +158,10 @@ export class IdentityManager {
           identifiedId,
         }),
       });
-    } catch {
-      // Silently fail for merge
+    } catch (error) {
+      // Never thrown on, but a failed merge loses the anonymous history
+      // this user built before logging in.
+      this.diagnostics.warn(`merging ${anonymousId} into ${identifiedId} failed`, error);
     }
   }
 
@@ -173,8 +184,8 @@ export class IdentityManager {
           currency,
         }),
       });
-    } catch {
-      // Silently fail
+    } catch (error) {
+      this.diagnostics.warn(`a revenue event of ${amount} was not recorded`, error);
     }
   }
 

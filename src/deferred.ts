@@ -1,3 +1,5 @@
+import { Diagnostics } from './diagnostics';
+
 export interface DeferredMatchResult {
   matched: boolean;
   linkId?: string;
@@ -9,15 +11,19 @@ export interface DeferredMatchResult {
  * The device description the server matches an install against. Mirrors
  * `FingerprintDto` on the API, where only `os` is required.
  *
- * Fingerprint matching needs `ip` — the server pairs an install with a click
- * from the same address — and a page cannot learn its own public address, so
- * from a browser this path only ever answers "not matched". It is here for a
- * caller that does know: a webview inside a native app, or a server relaying
- * on a device's behalf. Cookie matching, which runs first and needs none of
- * this, is the web's real path.
+ * Sending one is how a caller opts into fingerprint matching: the server
+ * pairs the install with a click from the same address, and it takes that
+ * address from the request rather than from this body — so a page gets
+ * fingerprint matching for free, and cannot ask for someone else's click.
  */
 export interface DeferredFingerprint {
   os?: string;
+  /**
+   * @deprecated Never sent. `FingerprintDto` rejects it — an address in the
+   * body was an instruction to claim whoever's click came from it — and the
+   * server derives the real one from the request. Still accepted here so a
+   * caller that passes it keeps compiling; it is dropped.
+   */
   ip?: string;
   osVersion?: string;
   model?: string;
@@ -36,10 +42,12 @@ interface ServerMatch {
 export class DeferredDeepLink {
   private baseUrl: string;
   private apiKey: string;
+  private diagnostics: Diagnostics;
 
-  constructor(baseUrl: string, apiKey: string) {
+  constructor(baseUrl: string, apiKey: string, diagnostics: Diagnostics = new Diagnostics()) {
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;
+    this.diagnostics = diagnostics;
   }
 
   async match(params?: {
@@ -50,63 +58,83 @@ export class DeferredDeepLink {
     deviceFingerprint?: string | DeferredFingerprint;
     platform?: string;
   }): Promise<DeferredMatchResult> {
-    // Check for cookie-based matching first
-    const shortCode = this.getCookie('dyplink_ref');
-    const paramsStr = this.getCookie('dyplink_params');
+    // The redirect sets these on the way through, and they are what the
+    // web's real match is made of.
+    const cookieRef = this.getCookie('dyplink_ref');
+    const cookieParams = this.readParamsCookie();
 
-    if (shortCode) {
-      let deepLinkParams: Record<string, unknown> = {};
-      if (paramsStr) {
-        try {
-          deepLinkParams = JSON.parse(decodeURIComponent(paramsStr));
-        } catch {
-          // Invalid params
-        }
-      }
-      return {
-        matched: true,
-        shortCode: decodeURIComponent(shortCode),
-        deepLinkParams,
-      };
+    const fingerprint = params?.deviceFingerprint
+      ? this.toFingerprint(params.deviceFingerprint, params.platform)
+      : undefined;
+
+    if (!cookieRef && !fingerprint) {
+      this.diagnostics.debug('no cookie ref and no fingerprint — nothing to match on');
+      return { matched: false };
     }
 
-    // Try server-side fingerprint matching
-    if (params?.deviceFingerprint) {
-      try {
-        const response = await fetch(`${this.baseUrl}/api/deferred/match`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-Key': this.apiKey,
-          },
-          // `DeferredMatchDto` accepts `fingerprint` and `cookieRef` and
-          // nothing else: the API's validation pipe runs with
-          // `forbidNonWhitelisted`, so one extra top-level field — a
-          // `platform`, say — makes the whole request a 400.
-          body: JSON.stringify({
-            fingerprint: this.toFingerprint(
-              params.deviceFingerprint,
-              params.platform,
-            ),
-          }),
-        });
+    try {
+      const response = await fetch(`${this.baseUrl}/api/deferred/match`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': this.apiKey,
+        },
+        // `DeferredMatchDto` accepts `fingerprint` and `cookieRef` and
+        // nothing else: the API's validation pipe runs with
+        // `forbidNonWhitelisted`, so one extra top-level field — a
+        // `platform`, say — makes the whole request a 400.
+        //
+        // The cookie ref goes in the body even though this used to answer
+        // from the cookie alone and return before ever making the request.
+        // The answer looked right, and the whole funnel downstream of it was
+        // wrong: the server is what marks `ClickEventEntity.matched`, that
+        // column is the join key from a click to its install and
+        // conversions, and no `linkId` ever came back either. The Android
+        // SDK has always sent it.
+        body: JSON.stringify({
+          ...(cookieRef ? { cookieRef } : {}),
+          ...(fingerprint ? { fingerprint } : {}),
+        }),
+      });
 
-        if (response.ok) {
-          const root = await response.json() as
-            { data?: ServerMatch } & ServerMatch;
-          const match = root.data ?? root;
-          return {
-            matched: match.matched ?? false,
-            linkId: match.linkId,
-            shortCode: match.shortCode,
-            // The server calls them `params`; this result has always
-            // called them `deepLinkParams`, and callers read that.
-            deepLinkParams: match.params,
-          };
+      if (response.ok) {
+        const root = await response.json() as
+          { data?: ServerMatch } & ServerMatch;
+        const match = root.data ?? root;
+
+        if (!match.matched) {
+          this.diagnostics.debug('the server found no click to match this install to');
+          return { matched: false };
         }
-      } catch {
-        // Silently fail
+
+        return {
+          matched: true,
+          linkId: match.linkId,
+          // The link's own short code and params, as the server resolved
+          // them; the cookie's stand in only if it somehow answered without
+          // them. The server calls the params `params`, and this result has
+          // always called them `deepLinkParams` — callers read that.
+          shortCode: match.shortCode ?? cookieRef ?? undefined,
+          deepLinkParams: match.params ?? cookieParams,
+        };
       }
+
+      this.diagnostics.warn(`deferred match answered ${response.status}`);
+    } catch (error) {
+      this.diagnostics.warn('deferred match did not reach the API', error);
+    }
+
+    // The request failed, and the cookie is still local evidence of where
+    // this device came from. Handing it back is what lets an install opened
+    // offline still route to the right place — but the server has not been
+    // told, so the click stays unmatched until a later call reaches it.
+    if (cookieRef) {
+      this.diagnostics.debug('answering the deferred match from the cookie; the server has not recorded it');
+      return {
+        matched: true,
+        shortCode: cookieRef,
+        deepLinkParams: cookieParams,
+      };
     }
 
     return { matched: false };
@@ -117,24 +145,45 @@ export class DeferredDeepLink {
    *
    * `os` is the only field the server requires, so a caller that knows
    * nothing about the device still gets a well-formed request: the browser's
-   * own platform stands in.
+   * own platform stands in. `ip` is dropped rather than forwarded — the DTO
+   * refuses it outright, so forwarding one would turn the whole match into a
+   * 400.
    */
   private toFingerprint(
     fingerprint: string | DeferredFingerprint,
     platform?: string,
-  ): DeferredFingerprint & { os: string } {
+  ): Omit<DeferredFingerprint, 'ip'> & { os: string } {
     const fields: DeferredFingerprint =
       typeof fingerprint === 'string' ? { os: fingerprint } : fingerprint;
+    const { ip, ...sendable } = fields;
+
+    if (ip) {
+      this.diagnostics.debug('a fingerprint ip was dropped; the server derives the address from the request');
+    }
 
     return {
-      ...fields,
+      ...sendable,
       os: fields.os || platform || this.detectPlatform(),
     };
   }
 
+  /** The deep link params the redirect left behind, if it left any. */
+  private readParamsCookie(): Record<string, unknown> {
+    // `getCookie` has already percent-decoded it.
+    const raw = this.getCookie('dyplink_params');
+    if (!raw) return {};
+
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      this.diagnostics.warn('the dyplink_params cookie could not be read', error);
+      return {};
+    }
+  }
+
   private getCookie(name: string): string | null {
     const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-    return match ? match[2] : null;
+    return match ? decodeURIComponent(match[2]) : null;
   }
 
   private detectPlatform(): string {
