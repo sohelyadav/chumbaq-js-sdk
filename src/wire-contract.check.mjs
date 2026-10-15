@@ -223,5 +223,66 @@ await failed.load('w1');
 failed.render();
 check('a failed load renders nothing', body.children.length === 0);
 
+// ── Push campaign engagement ──────────────────────────────────────────
+
+console.log('\npush campaigns are reported, so web CTR is not always zero');
+
+const { PushManager } = await jiti.import(path.join(here, 'push.ts'));
+const push = new PushManager('https://api.test', 'key', 'proj');
+
+calls = stubFetch({ json: {} });
+await push.reportNotificationReceived({ dyplink_campaign_id: 'camp-1' }, 'fp-1');
+check('a delivery is posted to the ingestion endpoint', calls[0]?.url === 'https://api.test/api/push-notifications/events', calls[0]?.url);
+check('it reports `delivered`, which is a client-reportable type', calls[0]?.body?.type === 'delivered');
+check('it names the campaign and the device', calls[0]?.body?.campaignId === 'camp-1' && calls[0]?.body?.deviceFingerprint === 'fp-1');
+check('the platform is web', calls[0]?.body?.platform === 'web');
+check('it carries when it happened, not when it arrived', typeof calls[0]?.body?.occurredAt === 'string');
+
+calls = stubFetch({ json: {} });
+let url = await push.reportNotificationClicked(
+  { dyplink_campaign_id: 'camp-2', deep_link_url: 'https://app.test/p/42' },
+  'fp-1',
+);
+check('a tap reports `click`', calls[0]?.body?.type === 'click');
+check('a tap hands back the destination', url === 'https://app.test/p/42');
+check('the report survives the navigation it races', calls[0]?.init?.keepalive === true);
+
+calls = stubFetch({ json: {} });
+url = await push.reportNotificationClicked({ dyplink_campaign_id: 'camp-3', link: 'https://app.test/fb' }, 'fp-1');
+check('`link` is the fallback, as on every other client', url === 'https://app.test/fb');
+
+calls = stubFetch({ json: {} });
+url = await push.reportNotificationClicked({ dyplink_campaign_id: 'camp-4' }, 'fp-1');
+check('a campaign with no deep link hands back nothing', url === null);
+check('…and is still reported', calls.length === 1);
+
+// Anything that is not a campaign of ours, or is unusable, is ignored: the
+// host calls this for every message it receives.
+for (const [label, data] of [
+  ['a payload with no campaign id', { title: 'hello' }],
+  ['a blank campaign id', { dyplink_campaign_id: '' }],
+  ['a non-string campaign id', { dyplink_campaign_id: 42 }],
+]) {
+  calls = stubFetch({ json: {} });
+  await push.reportNotificationReceived(data, 'fp-1');
+  check(`${label} is ignored`, calls.length === 0);
+}
+
+calls = stubFetch({ json: {} });
+await push.reportNotificationReceived({ dyplink_campaign_id: 'camp-5' }, '');
+check('no device fingerprint means nothing to report', calls.length === 0);
+
+calls = stubFetch({ json: {} });
+url = await push.reportNotificationClicked({ dyplink_campaign_id: 'camp-6', deep_link_url: 42, link: 'https://app.test/ok' }, 'fp-1');
+check('an unusable deep link falls through to the next key', url === 'https://app.test/ok');
+
+globalThis.fetch = async () => { throw new Error('offline'); };
+let threw = false;
+try {
+  url = await push.reportNotificationClicked({ dyplink_campaign_id: 'camp-7', deep_link_url: 'https://app.test/x' }, 'fp-1');
+} catch { threw = true; }
+check('a transport failure never reaches the caller', !threw);
+check('…and the tap still goes where it was going', url === 'https://app.test/x');
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length > 0) process.exit(1);
