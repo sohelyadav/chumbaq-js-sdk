@@ -2,7 +2,7 @@ import { Tracker, TrackOptions } from './tracker';
 import { BannerPosition, BannerRenderer } from './banner';
 import { DeferredDeepLink, DeferredFingerprint, DeferredMatchResult } from './deferred';
 import { IdentityManager, IdentifyParams, IdentifyResult } from './identity';
-import { PushManager, PushRegistrationResult } from './push';
+import { PushManager, PushPayloadData, PushRegistrationResult } from './push';
 import { EventTracker } from './events';
 import { InAppMessageManager, InAppMessage, MessageAction, MessageCallback, ActionCallback } from './in-app-messages';
 
@@ -186,6 +186,34 @@ export class Dyplink {
     return this.pushManager.unregisterToken(token);
   }
 
+  /**
+   * Reports that a push campaign reached this browser.
+   *
+   * The SDK never intercepts a message — a page cannot — so hand it the
+   * payload your own Firebase Messaging handler receives. A payload that is
+   * not a Dyplink campaign is ignored, so it is safe to call for every one.
+   *
+   * ```ts
+   * onMessage(messaging, (payload) =>
+   *   dyplink.reportPushReceived(payload.data));
+   * ```
+   */
+  async reportPushReceived(data: PushPayloadData): Promise<void> {
+    return this.pushManager.reportNotificationReceived(data, this._deviceFingerprint);
+  }
+
+  /**
+   * Reports a tap on a push campaign and hands back where it should go.
+   *
+   * ```ts
+   * const url = await dyplink.reportPushClicked(data);
+   * if (url) router.push(url);
+   * ```
+   */
+  async reportPushClicked(data: PushPayloadData): Promise<string | null> {
+    return this.pushManager.reportNotificationClicked(data, this._deviceFingerprint);
+  }
+
   /** Track a revenue event and update the user's LTV. */
   async trackRevenue(amount: number, currency?: string): Promise<void> {
     return this.identityManager.trackRevenue(
@@ -234,7 +262,7 @@ export { Tracker, TrackOptions } from './tracker';
 export { Banner, BannerPosition, BannerRenderer, BannerWidget } from './banner';
 export { DeferredDeepLink, DeferredFingerprint, DeferredMatchResult } from './deferred';
 export { IdentityManager, IdentifyParams, IdentifyResult } from './identity';
-export { PushManager, PushRegistrationResult } from './push';
+export { PushManager, PushPayloadData, PushRegistrationResult } from './push';
 export { EventTracker, TrackEventOptions } from './events';
 export { InAppMessageManager, InAppMessage, MessageAction, MessageCallback, ActionCallback } from './in-app-messages';
 export default Dyplink;
