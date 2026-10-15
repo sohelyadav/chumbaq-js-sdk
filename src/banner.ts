@@ -1,3 +1,4 @@
+import { Diagnostics } from './diagnostics';
 import { safeNavigationUrl } from './safe-url';
 
 /** One banner inside a widget, as `GET /api/in-app-banners/serve/:categoryId` returns it. */
@@ -38,10 +39,12 @@ export class BannerRenderer {
   private banner: Banner | null = null;
   private element: HTMLElement | null = null;
   private position: BannerPosition = 'bottom';
+  private diagnostics: Diagnostics;
 
-  constructor(baseUrl: string, apiKey: string) {
+  constructor(baseUrl: string, apiKey: string, diagnostics: Diagnostics = new Diagnostics()) {
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;
+    this.diagnostics = diagnostics;
   }
 
   /**
@@ -52,12 +55,24 @@ export class BannerRenderer {
    * without being told which one.
    */
   async load(widgetId: string): Promise<void> {
+    // Whatever was loaded before is gone the moment a new widget is asked
+    // for, successful or not. It used to survive a failure, and since a
+    // render draws whatever is loaded, `showBanner('A')` followed by a
+    // `showBanner('B')` that 404s put A's banner back on the page — and
+    // reported the tap against A's id, which is a click the campaign never
+    // got.
+    this.widget = null;
+    this.banner = null;
+
     try {
       const response = await fetch(
         `${this.baseUrl}/api/in-app-banners/serve/${widgetId}`,
         { headers: { 'X-API-Key': this.apiKey } },
       );
-      if (!response.ok) return;
+      if (!response.ok) {
+        this.diagnostics.warn(`banner widget ${widgetId} answered ${response.status}; nothing will be shown`);
+        return;
+      }
 
       // Every API response is wrapped in `{ data: … }`; falling back to the
       // root keeps an unwrapped body working.
@@ -69,17 +84,28 @@ export class BannerRenderer {
       this.banner = (served.banners ?? [])
         .filter((b) => b.isActive !== false)
         .sort((a, b) => a.sortOrder - b.sortOrder)[0] ?? null;
-    } catch {
-      // Silently fail — a banner is never worth breaking a page over.
+
+      if (!this.banner) {
+        this.diagnostics.debug(`banner widget ${widgetId} served no active banner`);
+      }
+    } catch (error) {
+      // Never thrown on — a banner is not worth breaking a page over — but
+      // no longer silent either.
+      this.diagnostics.warn(`banner widget ${widgetId} did not load`, error);
     }
   }
 
   render(position: BannerPosition = 'bottom'): void {
+    // Taken down first, before anything is known about what replaces it:
+    // the strip on screen belongs to whatever was loaded last, and a render
+    // with nothing to show must leave nothing behind rather than leave the
+    // previous widget's strip collecting taps.
+    this.dismiss();
+
     const banner = this.banner;
     if (!banner) return;
 
     this.position = position;
-    this.dismiss();
 
     const background = this.widget?.backgroundColor || '#1a1a2e';
 
@@ -160,6 +186,8 @@ export class BannerRenderer {
       // must not wait on analytics, and leaving the page must not cancel it.
       cta.addEventListener('click', () => this.recordClick(banner.id));
       strip.appendChild(cta);
+    } else if (banner.clickUrl) {
+      this.diagnostics.warn('the banner’s call to action was dropped: its destination is one a page must not be sent to', banner.clickUrl);
     }
 
     const close = document.createElement('button');
@@ -195,8 +223,9 @@ export class BannerRenderer {
       method: 'POST',
       headers: { 'X-API-Key': this.apiKey },
       keepalive: true,
-    }).catch(() => {
-      // Best effort.
+    }).catch((error) => {
+      // Best effort — the tap has already happened.
+      this.diagnostics.warn(`the click on banner ${bannerId} was not reported`, error);
     });
   }
 }
