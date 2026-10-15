@@ -1,3 +1,5 @@
+import { safeNavigationUrl } from './safe-url';
+
 /** One banner inside a widget, as `GET /api/in-app-banners/serve/:categoryId` returns it. */
 export interface Banner {
   id: string;
@@ -135,9 +137,13 @@ export class BannerRenderer {
     }
     strip.appendChild(copy);
 
-    if (banner.clickUrl) {
+    // A `javascript:` href executes on click, and a banner's destination
+    // comes back from the API — see `safeNavigationUrl`.
+    const destination = safeNavigationUrl(banner.clickUrl);
+    if (destination) {
       const cta = document.createElement('a');
-      cta.href = banner.clickUrl;
+      cta.href = destination;
+      cta.rel = 'noopener noreferrer';
       cta.textContent = banner.ctaText || 'Open';
       Object.assign(cta.style, {
         background: '#3b82f6',

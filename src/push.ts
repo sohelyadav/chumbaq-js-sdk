@@ -1,3 +1,5 @@
+import { safeNavigationUrl } from './safe-url';
+
 export interface PushRegistrationResult {
   id: string;
   token: string;
@@ -159,11 +161,18 @@ export class PushManager {
    * `data` comes from the push payload and may hold anything, so a value
    * that is not a non-empty string is treated as absent and the next key is
    * tried — the same precedence the Android, iOS and Flutter SDKs use.
+   *
+   * A destination a page must not be navigated to is treated as absent too.
+   * This method's whole purpose is to hand a caller something to navigate
+   * to, and the documented use is exactly that, so refusing it here is the
+   * only place that reliably helps — see `safeNavigationUrl`.
    */
   private deepLinkFrom(data: PushPayloadData): string | null {
     for (const key of DEEP_LINK_DATA_KEYS) {
       const value = data?.[key];
-      if (typeof value === 'string' && value.length > 0) return value;
+      if (typeof value !== 'string' || value.length === 0) continue;
+      const destination = safeNavigationUrl(value);
+      if (destination) return destination;
     }
     return null;
   }

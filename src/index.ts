@@ -263,6 +263,7 @@ export { Banner, BannerPosition, BannerRenderer, BannerWidget } from './banner';
 export { DeferredDeepLink, DeferredFingerprint, DeferredMatchResult } from './deferred';
 export { IdentityManager, IdentifyParams, IdentifyResult } from './identity';
 export { PushManager, PushPayloadData, PushRegistrationResult } from './push';
+export { safeNavigationUrl } from './safe-url';
 export { EventTracker, TrackEventOptions } from './events';
 export { InAppMessageManager, InAppMessage, MessageAction, MessageCallback, ActionCallback } from './in-app-messages';
 export default Dyplink;

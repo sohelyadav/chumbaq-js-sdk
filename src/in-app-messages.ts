@@ -1,3 +1,5 @@
+import { safeNavigationUrl } from './safe-url';
+
 // ═══════════════════════════════════════════════════════
 // Dyplink In-App Messages SDK Module
 // ═══════════════════════════════════════════════════════
@@ -528,16 +530,21 @@ export class InAppMessageManager {
   private handleButtonClick(messageId: string, button: MessageButton): void {
     this.trackEvent(messageId, 'cta_click', button.id);
 
-    // Execute action
+    // Execute action. A button's destination is authored in the dashboard
+    // and arrives over the network, so following one is navigating to
+    // whatever came back from the API — see `safeNavigationUrl`.
+    const destination = safeNavigationUrl(button.actionUrl);
     switch (button.action) {
       case 'url':
-        if (button.actionUrl) {
-          window.open(button.actionUrl, '_blank');
+        // `noopener` as well: without it the opened page gets a handle on
+        // this one through `window.opener`.
+        if (destination) {
+          window.open(destination, '_blank', 'noopener,noreferrer');
         }
         break;
       case 'deep_link':
-        if (button.actionUrl) {
-          window.location.href = button.actionUrl;
+        if (destination) {
+          window.location.href = destination;
         }
         break;
       case 'custom_event':

@@ -284,5 +284,77 @@ try {
 check('a transport failure never reaches the caller', !threw);
 check('…and the tap still goes where it was going', url === 'https://app.test/x');
 
+// ── Destinations the SDK is told to go to ─────────────────────────────
+
+console.log('\nan executable destination is refused, however it is spelled');
+
+const { safeNavigationUrl } = await jiti.import(path.join(here, 'safe-url.ts'));
+
+for (const safe of [
+  'https://app.test/products/42',
+  'http://app.test/x',
+  '/relative/path',
+  'myapp://product/42',          // a Dyplink deep link is very often this
+  'mailto:hi@app.test',
+  'tel:+15551234',
+]) {
+  check(`${safe} is followed`, safeNavigationUrl(safe) === safe);
+}
+
+for (const unsafe of [
+  'javascript:alert(1)',
+  'JavaScript:alert(1)',          // scheme matching is case-insensitive
+  '  javascript:alert(1)',        // leading whitespace is stripped by the parser
+  '\tjavascript:alert(1)',
+  '\njavascript:alert(1)',
+  'java\tscript:alert(1)',        // a control character inside the scheme
+  'vbscript:msgbox(1)',
+  'data:text/html,<script>alert(1)</script>',
+  'file:///etc/passwd',
+  'blob:https://app.test/abc',
+]) {
+  check(
+    `${JSON.stringify(unsafe)} is refused`,
+    safeNavigationUrl(unsafe) === null,
+    `got ${JSON.stringify(safeNavigationUrl(unsafe))}`,
+  );
+}
+
+check('an empty destination is refused', safeNavigationUrl('') === null);
+check('a missing destination is refused', safeNavigationUrl(undefined) === null);
+check('an unparseable destination is refused', safeNavigationUrl('http://[') === null);
+
+// It has to hold at the places that actually navigate, not only in the
+// helper — that is the whole point.
+calls = stubFetch({ json: {} });
+url = await push.reportNotificationClicked(
+  { dyplink_campaign_id: 'camp-8', deep_link_url: 'javascript:alert(1)' },
+  'fp-1',
+);
+check('a push campaign cannot hand back an executable destination', url === null);
+
+calls = stubFetch({ json: {} });
+url = await push.reportNotificationClicked(
+  { dyplink_campaign_id: 'camp-9', deep_link_url: 'javascript:alert(1)', link: 'https://app.test/ok' },
+  'fp-1',
+);
+check('…and the next key is tried instead', url === 'https://app.test/ok');
+
+body.children = [];
+stubFetch({ json: { data: {
+  category: { id: 'w1', name: 'Promos' },
+  banners: [{ id: 'b-x', title: 'Tap me', imageUrl: null, clickUrl: 'javascript:alert(1)', ctaText: 'Go', sortOrder: 1, isActive: true }],
+} } });
+const guarded = new BannerRenderer('https://api.test', 'key');
+await guarded.load('w1');
+guarded.render();
+const guardedStrip = body.children[0];
+const guardedNodes = guardedStrip ? [guardedStrip, ...guardedStrip.descendants] : [];
+check('the banner still renders', !!guardedStrip);
+check(
+  'but its call to action is dropped rather than made executable',
+  !guardedNodes.some((n) => n.tagName === 'A'),
+);
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length > 0) process.exit(1);
