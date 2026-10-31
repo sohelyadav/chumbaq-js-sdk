@@ -1,5 +1,5 @@
 /**
- * Checks for the three places `@dyplink/sdk` talks to the API and reads
+ * Checks for the three places `@chumbaq/sdk` talks to the API and reads
  * something back: the deferred matcher, the banner widget renderer, and the
  * in-app message poller.
  *
@@ -9,7 +9,7 @@
  * machine with an `EACCES` in the npm cache. So the assertions live here,
  * runnable with nothing but node:
  *
- *     npm run test:logic -w @dyplink/sdk
+ *     npm run test:logic -w @chumbaq/sdk
  *
  * The same arrangement as `apps/web/src/lib/segment-form.check.mjs`, for the
  * same reason, and it converts to a `.spec.ts` almost verbatim if a runner is
@@ -205,7 +205,7 @@ check('no match is reported as unmatched', result.matched === false);
 // click to its install and conversions, and no `linkId` ever came back.
 console.log('\na cookie match is made by the server, not by the client');
 
-document.cookie = 'dyplink_ref=TWqU1oS; dyplink_params=%7B%22probe%22%3A%22ok%22%7D';
+document.cookie = 'chumbaq_ref=TWqU1oS; chumbaq_params=%7B%22probe%22%3A%22ok%22%7D';
 
 calls = stubFetch({ json: { data: match } });
 result = await new DeferredDeepLink('https://api.test', 'key').match();
@@ -302,7 +302,7 @@ const { PushManager } = await jiti.import(path.join(here, 'push.ts'));
 const push = new PushManager('https://api.test', 'key', 'proj');
 
 calls = stubFetch({ json: {} });
-await push.reportNotificationReceived({ dyplink_campaign_id: 'camp-1' }, 'fp-1');
+await push.reportNotificationReceived({ chumbaq_campaign_id: 'camp-1' }, 'fp-1');
 check('a delivery is posted to the ingestion endpoint', calls[0]?.url === 'https://api.test/api/push-notifications/events', calls[0]?.url);
 check('it reports `delivered`, which is a client-reportable type', calls[0]?.body?.type === 'delivered');
 check('it names the campaign and the device', calls[0]?.body?.campaignId === 'camp-1' && calls[0]?.body?.deviceFingerprint === 'fp-1');
@@ -311,7 +311,7 @@ check('it carries when it happened, not when it arrived', typeof calls[0]?.body?
 
 calls = stubFetch({ json: {} });
 let url = await push.reportNotificationClicked(
-  { dyplink_campaign_id: 'camp-2', deep_link_url: 'https://app.test/p/42' },
+  { chumbaq_campaign_id: 'camp-2', deep_link_url: 'https://app.test/p/42' },
   'fp-1',
 );
 check('a tap reports `click`', calls[0]?.body?.type === 'click');
@@ -319,11 +319,11 @@ check('a tap hands back the destination', url === 'https://app.test/p/42');
 check('the report survives the navigation it races', calls[0]?.init?.keepalive === true);
 
 calls = stubFetch({ json: {} });
-url = await push.reportNotificationClicked({ dyplink_campaign_id: 'camp-3', link: 'https://app.test/fb' }, 'fp-1');
+url = await push.reportNotificationClicked({ chumbaq_campaign_id: 'camp-3', link: 'https://app.test/fb' }, 'fp-1');
 check('`link` is the fallback, as on every other client', url === 'https://app.test/fb');
 
 calls = stubFetch({ json: {} });
-url = await push.reportNotificationClicked({ dyplink_campaign_id: 'camp-4' }, 'fp-1');
+url = await push.reportNotificationClicked({ chumbaq_campaign_id: 'camp-4' }, 'fp-1');
 check('a campaign with no deep link hands back nothing', url === null);
 check('…and is still reported', calls.length === 1);
 
@@ -331,8 +331,8 @@ check('…and is still reported', calls.length === 1);
 // host calls this for every message it receives.
 for (const [label, data] of [
   ['a payload with no campaign id', { title: 'hello' }],
-  ['a blank campaign id', { dyplink_campaign_id: '' }],
-  ['a non-string campaign id', { dyplink_campaign_id: 42 }],
+  ['a blank campaign id', { chumbaq_campaign_id: '' }],
+  ['a non-string campaign id', { chumbaq_campaign_id: 42 }],
 ]) {
   calls = stubFetch({ json: {} });
   await push.reportNotificationReceived(data, 'fp-1');
@@ -340,17 +340,17 @@ for (const [label, data] of [
 }
 
 calls = stubFetch({ json: {} });
-await push.reportNotificationReceived({ dyplink_campaign_id: 'camp-5' }, '');
+await push.reportNotificationReceived({ chumbaq_campaign_id: 'camp-5' }, '');
 check('no device fingerprint means nothing to report', calls.length === 0);
 
 calls = stubFetch({ json: {} });
-url = await push.reportNotificationClicked({ dyplink_campaign_id: 'camp-6', deep_link_url: 42, link: 'https://app.test/ok' }, 'fp-1');
+url = await push.reportNotificationClicked({ chumbaq_campaign_id: 'camp-6', deep_link_url: 42, link: 'https://app.test/ok' }, 'fp-1');
 check('an unusable deep link falls through to the next key', url === 'https://app.test/ok');
 
 globalThis.fetch = async () => { throw new Error('offline'); };
 let threw = false;
 try {
-  url = await push.reportNotificationClicked({ dyplink_campaign_id: 'camp-7', deep_link_url: 'https://app.test/x' }, 'fp-1');
+  url = await push.reportNotificationClicked({ chumbaq_campaign_id: 'camp-7', deep_link_url: 'https://app.test/x' }, 'fp-1');
 } catch { threw = true; }
 check('a transport failure never reaches the caller', !threw);
 check('…and the tap still goes where it was going', url === 'https://app.test/x');
@@ -365,7 +365,7 @@ for (const safe of [
   'https://app.test/products/42',
   'http://app.test/x',
   '/relative/path',
-  'myapp://product/42',          // a Dyplink deep link is very often this
+  'myapp://product/42',          // a Chumbaq deep link is very often this
   'mailto:hi@app.test',
   'tel:+15551234',
 ]) {
@@ -399,14 +399,14 @@ check('an unparseable destination is refused', safeNavigationUrl('http://[') ===
 // helper — that is the whole point.
 calls = stubFetch({ json: {} });
 url = await push.reportNotificationClicked(
-  { dyplink_campaign_id: 'camp-8', deep_link_url: 'javascript:alert(1)' },
+  { chumbaq_campaign_id: 'camp-8', deep_link_url: 'javascript:alert(1)' },
   'fp-1',
 );
 check('a push campaign cannot hand back an executable destination', url === null);
 
 calls = stubFetch({ json: {} });
 url = await push.reportNotificationClicked(
-  { dyplink_campaign_id: 'camp-9', deep_link_url: 'javascript:alert(1)', link: 'https://app.test/ok' },
+  { chumbaq_campaign_id: 'camp-9', deep_link_url: 'javascript:alert(1)', link: 'https://app.test/ok' },
   'fp-1',
 );
 check('…and the next key is tried instead', url === 'https://app.test/ok');
@@ -513,7 +513,7 @@ function scriptMessages(batches) {
 
 const eventTypes = (sent) => sent.filter((r) => r.url.endsWith('/api/messages/event')).map((r) => r.body?.eventType);
 const checkCalls = (sent) => sent.filter((r) => r.url.endsWith('/api/messages/check'));
-const onScreen = () => body.children.map((n) => n.getAttribute('data-dyplink-message'));
+const onScreen = () => body.children.map((n) => n.getAttribute('data-chumbaq-message'));
 // Found by what it is rather than by one of its attributes, so that running
 // this suite against a renderer that spelled its × differently still finds
 // the same button.
@@ -718,7 +718,7 @@ check('the new distinct id is what is asked about', checkCalls(sent).at(-1)?.bod
 
 console.log('\ninit starts messaging even when identify fails');
 
-const { Dyplink } = await jiti.import(path.join(here, 'index.ts'));
+const { Chumbaq } = await jiti.import(path.join(here, 'index.ts'));
 
 body.children = [];
 const initSent = [];
@@ -736,10 +736,10 @@ const intervals = [];
 const realSetInterval = globalThis.setInterval;
 globalThis.setInterval = (fn, ms) => { intervals.push(ms); return realSetInterval(fn, ms); };
 
-const dyplink = new Dyplink({ baseUrl: 'https://api.test', apiKey: 'key', projectId: 'proj' });
+const chumbaq = new Chumbaq({ baseUrl: 'https://api.test', apiKey: 'key', projectId: 'proj' });
 let initThrew = false;
 try {
-  await dyplink.init();
+  await chumbaq.init();
 } catch {
   initThrew = true;
 }
@@ -752,14 +752,14 @@ check('…and still starts the poll', intervals.includes(60000), intervals.join(
 // be another.
 check('…and the caller still hears about the failure', initThrew);
 
-// `Dyplink.reset()` is the logout a host actually calls.
-const beforeReset = dyplink.distinctId;
-dyplink.reset();
-await dyplink.inAppMessages.checkMessages({});
+// `Chumbaq.reset()` is the logout a host actually calls.
+const beforeReset = chumbaq.distinctId;
+chumbaq.reset();
+await chumbaq.inAppMessages.checkMessages({});
 const resetCheck = initSent.filter((r) => r.url.endsWith('/api/messages/check')).at(-1);
-check('reset gives the message manager the new anonymous id', resetCheck?.body?.distinctId === dyplink.distinctId, JSON.stringify(resetCheck?.body));
-check('…which is not the one that just logged out', dyplink.distinctId !== beforeReset);
-dyplink.inAppMessages.stopPolling();
+check('reset gives the message manager the new anonymous id', resetCheck?.body?.distinctId === chumbaq.distinctId, JSON.stringify(resetCheck?.body));
+check('…which is not the one that just logged out', chumbaq.distinctId !== beforeReset);
+chumbaq.inAppMessages.stopPolling();
 
 // ── A banner widget that fails to load ────────────────────────────────
 
@@ -839,14 +839,14 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 // A page: restores or mints its id, reports under it, and mirrors it for
 // this origin's workers.
 calls = stubFetch({ json: {} });
-const page = new Dyplink({ baseUrl: 'https://api.test', apiKey: 'key', projectId: 'proj' });
+const page = new Chumbaq({ baseUrl: 'https://api.test', apiKey: 'key', projectId: 'proj' });
 const pageId = page.deviceFingerprint;
-await page.reportPushReceived({ dyplink_campaign_id: 'camp-page' });
+await page.reportPushReceived({ chumbaq_campaign_id: 'camp-page' });
 await settle();
 
 check('a page reports under its own device id', pushEvents(calls)[0]?.deviceFingerprint === pageId, JSON.stringify(pushEvents(calls)[0]));
 check('the page mirrors that id where a worker can read it', mirrored.get('device_fingerprint') === pageId, JSON.stringify([...mirrored]));
-check('…and mirrors the id storage holds, not a second one', stored.get('dyplink_device_fp') === mirrored.get('device_fingerprint'));
+check('…and mirrors the id storage holds, not a second one', stored.get('chumbaq_device_fp') === mirrored.get('device_fingerprint'));
 
 // A worker: no `document`, no `localStorage`. The id its constructor mints
 // is a fresh one per activation and means nothing to the server, which is
@@ -857,16 +857,16 @@ delete globalThis.document;
 delete globalThis.localStorage;
 try {
   calls = stubFetch({ json: {} });
-  const worker = new Dyplink({ baseUrl: 'https://api.test', apiKey: 'key', projectId: 'proj' });
+  const worker = new Chumbaq({ baseUrl: 'https://api.test', apiKey: 'key', projectId: 'proj' });
   check('a worker mints an id of its own, which is not the device’s', worker.deviceFingerprint !== pageId);
 
-  await worker.reportPushReceived({ dyplink_campaign_id: 'camp-sw' });
+  await worker.reportPushReceived({ chumbaq_campaign_id: 'camp-sw' });
   check('a worker reports the delivery', pushEvents(calls).length === 1, `${pushEvents(calls).length} reports`);
   check('…under the id the page mirrored, not the one it minted', pushEvents(calls)[0]?.deviceFingerprint === pageId, JSON.stringify(pushEvents(calls)[0]));
   check('…as a delivery, on the web platform', pushEvents(calls)[0]?.type === 'delivered' && pushEvents(calls)[0]?.platform === 'web');
 
   calls = stubFetch({ json: {} });
-  url = await worker.reportPushClicked({ dyplink_campaign_id: 'camp-sw', deep_link_url: 'https://app.test/x' });
+  url = await worker.reportPushClicked({ chumbaq_campaign_id: 'camp-sw', deep_link_url: 'https://app.test/x' });
   check('a worker reports a tap under the same id', pushEvents(calls)[0]?.deviceFingerprint === pageId && pushEvents(calls)[0]?.type === 'click');
   check('…and hands back the destination', url === 'https://app.test/x');
 
@@ -876,11 +876,11 @@ try {
   // anyway.
   mirrored.clear();
   calls = stubFetch({ json: {} });
-  const orphan = new Dyplink({ baseUrl: 'https://api.test', apiKey: 'key', projectId: 'proj' });
-  await orphan.reportPushReceived({ dyplink_campaign_id: 'camp-orphan' });
+  const orphan = new Chumbaq({ baseUrl: 'https://api.test', apiKey: 'key', projectId: 'proj' });
+  await orphan.reportPushReceived({ chumbaq_campaign_id: 'camp-orphan' });
   check('a worker with an empty mirror reports nothing', pushEvents(calls).length === 0, `${pushEvents(calls).length} reports`);
 
-  url = await orphan.reportPushClicked({ dyplink_campaign_id: 'camp-orphan', deep_link_url: 'https://app.test/y' });
+  url = await orphan.reportPushClicked({ chumbaq_campaign_id: 'camp-orphan', deep_link_url: 'https://app.test/y' });
   check('…and a tap it cannot report still goes where it was going', url === 'https://app.test/y');
   check('…and still reports nothing', pushEvents(calls).length === 0);
 } finally {
@@ -895,12 +895,12 @@ mirrored.clear();
 delete globalThis.localStorage;
 try {
   stubFetch({ json: {} });
-  const ephemeral = new Dyplink({ baseUrl: 'https://api.test', apiKey: 'key', projectId: 'proj' });
+  const ephemeral = new Chumbaq({ baseUrl: 'https://api.test', apiKey: 'key', projectId: 'proj' });
   await settle();
   check('a page with no durable storage does not mirror its id', mirrored.size === 0, JSON.stringify([...mirrored]));
   check('…and still reports under it itself', await (async () => {
     calls = stubFetch({ json: {} });
-    await ephemeral.reportPushReceived({ dyplink_campaign_id: 'camp-ephemeral' });
+    await ephemeral.reportPushReceived({ chumbaq_campaign_id: 'camp-ephemeral' });
     return pushEvents(calls)[0]?.deviceFingerprint === ephemeral.deviceFingerprint;
   })());
 } finally {
@@ -915,7 +915,7 @@ console.log('\ndiagnostics are opt-in, and never carry the api key');
 
 const { Diagnostics } = await jiti.import(path.join(here, 'diagnostics.ts'));
 
-const SECRET = 'dyplink_0000000000000000000000000000000000000000000000000000000000000000';
+const SECRET = 'chumbaq_0000000000000000000000000000000000000000000000000000000000000000';
 const written = [];
 const realWarn = console.warn;
 const realDebug = console.debug;
@@ -931,7 +931,7 @@ try {
   stubFetch({ ok: false, json: {} });
   await new InAppMessageManager('https://api.test', SECRET, 'proj', 'fp', 'anon', new Diagnostics(true)).checkMessages({});
   check('with debug on, the failure is reported', written.some((line) => line.includes('message check answered 500')), written.join(' | '));
-  check('every line says who wrote it', written.every((line) => line.startsWith('[dyplink] ')), written.join(' | '));
+  check('every line says who wrote it', written.every((line) => line.startsWith('[chumbaq] ')), written.join(' | '));
   check('the api key is never written', written.every((line) => !line.includes(SECRET)));
 } finally {
   console.warn = realWarn;

@@ -8,7 +8,7 @@ import { InAppMessageManager, InAppMessage, MessageAction, MessageCallback, Acti
 import { Diagnostics } from './diagnostics';
 import { DeviceIdentityStore } from './device-identity-store';
 
-export interface DyplinkConfig {
+export interface ChumbaqConfig {
   baseUrl: string;
   apiKey: string;
   projectId: string;
@@ -33,11 +33,11 @@ function generateUUID(): string {
   });
 }
 
-const STORAGE_KEY_ANON_ID = 'dyplink_anonymous_id';
-const STORAGE_KEY_FINGERPRINT = 'dyplink_device_fp';
-const COOKIE_NAME = 'dyplink_did';
+const STORAGE_KEY_ANON_ID = 'chumbaq_anonymous_id';
+const STORAGE_KEY_FINGERPRINT = 'chumbaq_device_fp';
+const COOKIE_NAME = 'chumbaq_did';
 
-export class Dyplink {
+export class Chumbaq {
   private tracker: Tracker;
   private banner: BannerRenderer;
   private deferred: DeferredDeepLink;
@@ -45,7 +45,7 @@ export class Dyplink {
   private pushManager: PushManager;
   private eventTracker: EventTracker;
   private _inAppMessages: InAppMessageManager;
-  private config: DyplinkConfig;
+  private config: ChumbaqConfig;
   private diagnostics: Diagnostics;
   private deviceStore: DeviceIdentityStore;
 
@@ -70,7 +70,7 @@ export class Dyplink {
   /** Whether the fingerprint came from, and was written back to, storage. */
   private _identityIsDurable: boolean;
 
-  constructor(config: DyplinkConfig) {
+  constructor(config: ChumbaqConfig) {
     this.config = config;
     this._platform = config.platform || 'web';
     this.diagnostics = new Diagnostics(config.debug === true);
@@ -255,11 +255,11 @@ export class Dyplink {
    *
    * The SDK never intercepts a message — a page cannot — so hand it the
    * payload your own Firebase Messaging handler receives. A payload that is
-   * not a Dyplink campaign is ignored, so it is safe to call for every one.
+   * not a Chumbaq campaign is ignored, so it is safe to call for every one.
    *
    * ```ts
    * onMessage(messaging, (payload) =>
-   *   dyplink.reportPushReceived(payload.data));
+   *   chumbaq.reportPushReceived(payload.data));
    * ```
    *
    * Callable from a service worker's push handler too, which is where most
@@ -278,7 +278,7 @@ export class Dyplink {
    * Reports a tap on a push campaign and hands back where it should go.
    *
    * ```ts
-   * const url = await dyplink.reportPushClicked(data);
+   * const url = await chumbaq.reportPushClicked(data);
    * if (url) router.push(url);
    * ```
    */
@@ -383,4 +383,4 @@ export { PushManager, PushPayloadData, PushRegistrationResult } from './push';
 export { safeNavigationUrl } from './safe-url';
 export { EventTracker, TrackEventOptions } from './events';
 export { InAppMessageManager, InAppMessage, MessageAction, MessageCallback, ActionCallback } from './in-app-messages';
-export default Dyplink;
+export default Chumbaq;

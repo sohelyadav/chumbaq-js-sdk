@@ -19,7 +19,7 @@ export interface PushRegistrationResult {
 export type PushPayloadData = Record<string, unknown>;
 
 /** Campaign id, so a report can say which campaign it belongs to. */
-const CAMPAIGN_ID_DATA_KEY = 'dyplink_campaign_id';
+const CAMPAIGN_ID_DATA_KEY = 'chumbaq_campaign_id';
 /** Where a tap should land. `link` is Firebase's own key, read second. */
 const DEEP_LINK_DATA_KEYS = ['deep_link_url', 'link'];
 
@@ -95,7 +95,7 @@ export class PushManager {
    * Reports that a campaign's push reached this browser.
    *
    * Call from a page — a foreground Firebase Messaging `onMessage` handler.
-   * A payload that is not a Dyplink campaign is ignored, so it is safe to
+   * A payload that is not a Chumbaq campaign is ignored, so it is safe to
    * call for every message.
    *
    * **From a service worker's push handler too**, which on web is where
@@ -104,12 +104,12 @@ export class PushManager {
    *
    * ```ts
    * // sw.js
-   * const dyplink = new Dyplink({ baseUrl, apiKey, projectId });
+   * const chumbaq = new Chumbaq({ baseUrl, apiKey, projectId });
    * self.addEventListener('push', (event) => {
    *   const data = event.data.json().data;
    *   event.waitUntil(Promise.all([
    *     self.registration.showNotification(…),
-   *     dyplink.reportPushReceived(data),
+   *     chumbaq.reportPushReceived(data),
    *   ]));
    * });
    * ```
@@ -146,8 +146,8 @@ export class PushManager {
    * in the device list and a permanent distortion of every rate derived
    * from it.
    *
-   * `Dyplink.reportPushReceived` wraps this and resolves the fingerprint —
-   * see `Dyplink.resolveReportingIdentity`.
+   * `Chumbaq.reportPushReceived` wraps this and resolves the fingerprint —
+   * see `Chumbaq.resolveReportingIdentity`.
    */
   async reportNotificationReceived(
     data: PushPayloadData,
@@ -162,7 +162,7 @@ export class PushManager {
    * Returns the campaign's deep link, or `null` when it has none — so a
    * caller can route in one step:
    *
-   * `Dyplink.reportPushClicked` wraps this and supplies the fingerprint.
+   * `Chumbaq.reportPushClicked` wraps this and supplies the fingerprint.
    *
    * The URL is returned even when reporting fails: navigation is what the
    * user asked for and analytics must not stand in its way.
@@ -215,7 +215,7 @@ export class PushManager {
     }
   }
 
-  /** `null` for a push that is not a Dyplink campaign. */
+  /** `null` for a push that is not a Chumbaq campaign. */
   private campaignIdFrom(data: PushPayloadData): string | null {
     const value = data?.[CAMPAIGN_ID_DATA_KEY];
     return typeof value === 'string' && value.length > 0 ? value : null;
@@ -226,7 +226,7 @@ export class PushManager {
    *
    * Public because a report can be refused — a context with no device
    * identity to report under — and where the tap goes is not contingent on
-   * analytics. `Dyplink.reportPushClicked` uses this on that path.
+   * analytics. `Chumbaq.reportPushClicked` uses this on that path.
    *
    * `data` comes from the push payload and may hold anything, so a value
    * that is not a non-empty string is treated as absent and the next key is

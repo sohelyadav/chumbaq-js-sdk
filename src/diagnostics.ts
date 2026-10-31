@@ -29,9 +29,9 @@ export class Diagnostics {
   warn(message: string, detail?: unknown): void {
     if (!this.enabled) return;
     if (detail === undefined) {
-      console.warn(`[dyplink] ${message}`);
+      console.warn(`[chumbaq] ${message}`);
     } else {
-      console.warn(`[dyplink] ${message}`, detail);
+      console.warn(`[chumbaq] ${message}`, detail);
     }
   }
 
@@ -42,9 +42,9 @@ export class Diagnostics {
   debug(message: string, detail?: unknown): void {
     if (!this.enabled) return;
     if (detail === undefined) {
-      console.debug(`[dyplink] ${message}`);
+      console.debug(`[chumbaq] ${message}`);
     } else {
-      console.debug(`[dyplink] ${message}`, detail);
+      console.debug(`[chumbaq] ${message}`, detail);
     }
   }
 }

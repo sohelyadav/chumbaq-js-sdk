@@ -2,7 +2,7 @@ import { Diagnostics } from './diagnostics';
 import { safeNavigationUrl } from './safe-url';
 
 // ═══════════════════════════════════════════════════════
-// Dyplink In-App Messages SDK Module
+// Chumbaq In-App Messages SDK Module
 // ═══════════════════════════════════════════════════════
 
 export type InAppMessageType = 'modal' | 'bottom_sheet' | 'banner_top' | 'banner_bottom' | 'fullscreen';
@@ -138,7 +138,7 @@ export class InAppMessageManager {
   /**
    * Forget the current user and take a new distinct ID — a logout.
    *
-   * Called by `Dyplink.reset()`. Everything queued, everything already
+   * Called by `Chumbaq.reset()`. Everything queued, everything already
    * queued once, and anything on screen belongs to the person who just
    * left: a campaign targeted at them must not be served to whoever uses
    * this browser next.
@@ -379,7 +379,7 @@ export class InAppMessageManager {
       borderRadius: `${t.radius}px`,
       overflow: 'hidden',
       boxShadow: '0 25px 50px -12px rgba(0,0,0,0.4)',
-      animation: 'dyplink-scale-in 0.3s cubic-bezier(0.34,1.56,0.64,1)',
+      animation: 'chumbaq-scale-in 0.3s cubic-bezier(0.34,1.56,0.64,1)',
     } as Partial<CSSStyleDeclaration>);
 
     this.appendCardContent(card, msg, t);
@@ -402,7 +402,7 @@ export class InAppMessageManager {
       borderRadius: `${t.radius}px ${t.radius}px 0 0`,
       overflow: 'hidden',
       boxShadow: '0 -10px 40px rgba(0,0,0,0.3)',
-      animation: 'dyplink-slide-up 0.35s cubic-bezier(0.22,1,0.36,1)',
+      animation: 'chumbaq-slide-up 0.35s cubic-bezier(0.22,1,0.36,1)',
     } as Partial<CSSStyleDeclaration>);
 
     // Drag handle
@@ -425,7 +425,7 @@ export class InAppMessageManager {
     const t = this.resolveTheme(msg.theme);
 
     const banner = document.createElement('div');
-    banner.setAttribute('data-dyplink-message', msg.id);
+    banner.setAttribute('data-chumbaq-message', msg.id);
 
     Object.assign(banner.style, {
       position: 'fixed',
@@ -441,7 +441,7 @@ export class InAppMessageManager {
       gap: '12px',
       boxShadow: `${position === 'top' ? '0 4px 20px' : '0 -4px 20px'} rgba(0,0,0,0.15)`,
       fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",
-      animation: `${position === 'top' ? 'dyplink-slide-down' : 'dyplink-slide-up'} 0.3s ease-out`,
+      animation: `${position === 'top' ? 'chumbaq-slide-down' : 'chumbaq-slide-up'} 0.3s ease-out`,
     } as Partial<CSSStyleDeclaration>);
 
     const content = document.createElement('div');
@@ -508,7 +508,7 @@ export class InAppMessageManager {
     const t = this.resolveTheme(msg.theme);
 
     const container = document.createElement('div');
-    container.setAttribute('data-dyplink-message', msg.id);
+    container.setAttribute('data-chumbaq-message', msg.id);
     Object.assign(container.style, {
       position: 'fixed',
       inset: '0',
@@ -518,7 +518,7 @@ export class InAppMessageManager {
       display: 'flex',
       flexDirection: 'column',
       fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",
-      animation: 'dyplink-fade-in 0.3s ease-out',
+      animation: 'chumbaq-fade-in 0.3s ease-out',
       overflowY: 'auto',
     } as Partial<CSSStyleDeclaration>);
 
@@ -716,7 +716,7 @@ export class InAppMessageManager {
 
   private createOverlay(overlayColor: string, dismissOnTap: boolean, messageId: string): HTMLElement {
     const overlay = document.createElement('div');
-    overlay.setAttribute('data-dyplink-message', messageId);
+    overlay.setAttribute('data-chumbaq-message', messageId);
     Object.assign(overlay.style, {
       position: 'fixed',
       inset: '0',
@@ -726,7 +726,7 @@ export class InAppMessageManager {
       alignItems: 'center',
       justifyContent: 'center',
       fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",
-      animation: 'dyplink-fade-in 0.25s ease-out',
+      animation: 'chumbaq-fade-in 0.25s ease-out',
     } as Partial<CSSStyleDeclaration>);
 
     if (dismissOnTap) {
@@ -928,24 +928,24 @@ export class InAppMessageManager {
   }
 
   private injectAnimationStyles(): void {
-    if (document.getElementById('dyplink-iam-styles')) return;
+    if (document.getElementById('chumbaq-iam-styles')) return;
 
     const style = document.createElement('style');
-    style.id = 'dyplink-iam-styles';
+    style.id = 'chumbaq-iam-styles';
     style.textContent = `
-      @keyframes dyplink-fade-in {
+      @keyframes chumbaq-fade-in {
         from { opacity: 0; }
         to { opacity: 1; }
       }
-      @keyframes dyplink-scale-in {
+      @keyframes chumbaq-scale-in {
         from { opacity: 0; transform: scale(0.85); }
         to { opacity: 1; transform: scale(1); }
       }
-      @keyframes dyplink-slide-up {
+      @keyframes chumbaq-slide-up {
         from { transform: translateY(100%); }
         to { transform: translateY(0); }
       }
-      @keyframes dyplink-slide-down {
+      @keyframes chumbaq-slide-down {
         from { transform: translateY(-100%); }
         to { transform: translateY(0); }
       }

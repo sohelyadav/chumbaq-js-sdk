@@ -6,7 +6,7 @@ import { Diagnostics } from './diagnostics';
  * Identity itself lives in `localStorage` — synchronous, which is why the
  * rest of the SDK can treat it as a plain field — and a
  * `ServiceWorkerGlobalScope` has no `localStorage` at all. A worker that
- * builds a `Dyplink` therefore mints a brand new id on every activation,
+ * builds a `Chumbaq` therefore mints a brand new id on every activation,
  * which is the whole reason push engagement could not be reported from a
  * worker. IndexedDB is reachable from both a page and its workers, so the
  * page mirrors its id here and the worker reads it back: one device, one id,
@@ -23,7 +23,7 @@ import { Diagnostics } from './diagnostics';
  * reached simply has no id in it, which is the one case push reporting still
  * refuses outright.
  */
-const DB_NAME = 'dyplink';
+const DB_NAME = 'chumbaq';
 const DB_VERSION = 1;
 const STORE_NAME = 'identity';
 const FINGERPRINT_KEY = 'device_fingerprint';

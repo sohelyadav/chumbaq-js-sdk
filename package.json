@@ -1,7 +1,7 @@
 {
-  "name": "@dyplink/sdk",
+  "name": "@chumbaq/sdk",
   "version": "0.1.0",
-  "description": "Dyplink JavaScript SDK for web integration",
+  "description": "Chumbaq JavaScript SDK for web integration",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
