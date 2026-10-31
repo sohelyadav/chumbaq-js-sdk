@@ -33,7 +33,7 @@ const EXECUTABLE_SCHEMES = new Set([
  * navigated to in the first place.
  *
  * Custom app schemes (`myapp://product/42`) are allowed deliberately. A
- * Dyplink deep link is very often one, including in a webview, and an
+ * Chumbaq deep link is very often one, including in a webview, and an
  * allow-list of `http`/`https` would break the SDK's main use.
  */
 export function safeNavigationUrl(raw: string | null | undefined): string | null {
@@ -50,7 +50,7 @@ export function safeNavigationUrl(raw: string | null | undefined): string | null
     // base is a fixed one rather than `location`, which is not needed to
     // learn a scheme and does not exist outside a browser.
     try {
-      new URL(raw, 'https://dyplink.invalid/');
+      new URL(raw, 'https://chumbaq.invalid/');
       return raw;
     } catch {
       return null;

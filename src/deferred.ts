@@ -60,7 +60,7 @@ export class DeferredDeepLink {
   }): Promise<DeferredMatchResult> {
     // The redirect sets these on the way through, and they are what the
     // web's real match is made of.
-    const cookieRef = this.getCookie('dyplink_ref');
+    const cookieRef = this.getCookie('chumbaq_ref');
     const cookieParams = this.readParamsCookie();
 
     const fingerprint = params?.deviceFingerprint
@@ -170,13 +170,13 @@ export class DeferredDeepLink {
   /** The deep link params the redirect left behind, if it left any. */
   private readParamsCookie(): Record<string, unknown> {
     // `getCookie` has already percent-decoded it.
-    const raw = this.getCookie('dyplink_params');
+    const raw = this.getCookie('chumbaq_params');
     if (!raw) return {};
 
     try {
       return JSON.parse(raw);
     } catch (error) {
-      this.diagnostics.warn('the dyplink_params cookie could not be read', error);
+      this.diagnostics.warn('the chumbaq_params cookie could not be read', error);
       return {};
     }
   }
