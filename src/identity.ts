@@ -39,6 +39,7 @@ export interface IdentifyParams {
   // Consent
   emailOptIn?: boolean;
   smsOptIn?: boolean;
+  whatsappOptIn?: boolean;
   pushOptIn?: boolean;
   gdprConsent?: boolean;
   doNotTrack?: boolean;
@@ -116,6 +117,7 @@ export class IdentityManager {
       // Consent
       emailOptIn: params.emailOptIn,
       smsOptIn: params.smsOptIn,
+      whatsappOptIn: params.whatsappOptIn,
       pushOptIn: params.pushOptIn,
       gdprConsent: params.gdprConsent,
       doNotTrack: params.doNotTrack ?? autoDetected.doNotTrack,
