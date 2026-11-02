@@ -2,7 +2,14 @@
   "name": "@chumbaq/sdk",
   "version": "0.1.0",
   "description": "Chumbaq JavaScript SDK for web integration",
-  "keywords": ["chumbaq", "deep-linking", "push-notifications", "in-app-messages", "customer-engagement"],
+  "keywords": [
+    "chumbaq",
+    "deep-linking",
+    "push-notifications",
+    "in-app-messages",
+    "customer-engagement"
+  ],
+  "license": "Apache-2.0",
   "homepage": "https://github.com/sohelyadav/chumbaq-js-sdk#readme",
   "bugs": "https://github.com/sohelyadav/chumbaq-js-sdk/issues",
   "repository": {
