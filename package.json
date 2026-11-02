@@ -2,18 +2,30 @@
   "name": "@chumbaq/sdk",
   "version": "0.1.0",
   "description": "Chumbaq JavaScript SDK for web integration",
+  "keywords": ["chumbaq", "deep-linking", "push-notifications", "in-app-messages", "customer-engagement"],
+  "homepage": "https://github.com/sohelyadav/chumbaq-js-sdk#readme",
+  "bugs": "https://github.com/sohelyadav/chumbaq-js-sdk/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sohelyadav/chumbaq-js-sdk.git"
+  },
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "lint": "tsc --noEmit",
-    "test:logic": "node src/wire-contract.check.mjs"
+    "test:logic": "node src/wire-contract.check.mjs",
+    "prepublishOnly": "npm run lint && npm run test:logic && npm run build"
   },
   "devDependencies": {
+    "jiti": "^2.6.1",
     "typescript": "^5.3.0"
   }
 }
