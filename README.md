@@ -86,3 +86,9 @@ npm run build        # emit dist/
 - [iOS](https://github.com/sohelyadav/chumbaq-ios-sdk)
 - [Android](https://github.com/sohelyadav/chumbaq-android-sdk)
 - [Flutter](https://github.com/sohelyadav/chumbaq-flutter-sdk)
+
+## License
+
+Copyright 2026 The Chumbaq Authors.
+
+Licensed under the [Apache License, Version 2.0](LICENSE).
