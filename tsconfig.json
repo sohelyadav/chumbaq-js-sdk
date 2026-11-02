@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2018",
     "module": "ESNext",
-    "lib": ["ES2018", "DOM"],
+    "lib": ["ES2019", "DOM"],
     "declaration": true,
     "declarationDir": "dist",
     "outDir": "dist",

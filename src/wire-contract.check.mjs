@@ -5,16 +5,12 @@
  *
  * ## Why this is a script and not a test suite
  *
- * `packages/sdk` has no test runner, and installing one failed on this
- * machine with an `EACCES` in the npm cache. So the assertions live here,
- * runnable with nothing but node:
+ * The SDK has no test runner, so the assertions live here, runnable with
+ * nothing but node (plus `jiti`, a dev dependency, to load the TypeScript):
  *
- *     npm run test:logic -w @chumbaq/sdk
+ *     npm run test:logic
  *
- * The same arrangement as `apps/web/src/lib/segment-form.check.mjs`, for the
- * same reason, and it converts to a `.spec.ts` almost verbatim if a runner is
- * ever added. `jiti` arrives with vite, so it is present whenever any of this
- * can be built at all.
+ * It converts to a `.spec.ts` almost verbatim if a runner is ever added.
  *
  * ## Why these assertions and not others
  *
