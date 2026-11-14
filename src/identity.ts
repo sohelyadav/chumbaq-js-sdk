@@ -5,6 +5,12 @@ export interface IdentifyParams {
   platform: string;
   distinctId?: string;
   externalUserId?: string;
+  /**
+   * Required with `externalUserId`: HMAC-SHA256 of the external user id under your
+   * project's identity secret, as hex, made on your own server and handed to the app
+   * (never put the secret in the app). Without it the server refuses the external id.
+   */
+  userHash?: string;
   traits?: Record<string, unknown>;
   // Profile
   firstName?: string;
@@ -83,6 +89,7 @@ export class IdentityManager {
       platform: params.platform,
       distinctId: params.distinctId,
       externalUserId: params.externalUserId,
+      userHash: params.userHash,
       traits: params.traits,
       // Profile
       firstName: params.firstName,

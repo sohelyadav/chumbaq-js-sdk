@@ -38,6 +38,7 @@ await chumbaq.identify({
   deviceFingerprint: chumbaq.deviceFingerprint,
   platform: 'web',
   externalUserId: 'user-123',
+  userHash, // from your server: see Identity verification
   firstName: 'Jane',
   traits: { plan: 'free' },
 });
@@ -46,6 +47,21 @@ chumbaq.reset(); // on logout
 ```
 
 `identify()` merges the anonymous history into the identified user.
+
+### Identity verification
+
+An external user id must come with a `userHash`: HMAC-SHA256 of the id under your
+project's identity secret (API keys page), made on **your server**, never in the app.
+Without it the server refuses the identify, so nobody holding your app's public key
+can claim to be one of your users.
+
+```ts
+// On your server
+const userHash = crypto.createHmac('sha256', IDENTITY_SECRET).update(userId).digest('hex');
+
+// In the app, with the hash your server returned
+await chumbaq.identify({ externalUserId: userId, userHash });
+```
 
 ## In-app messages and banners
 
