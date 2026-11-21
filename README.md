@@ -88,6 +88,86 @@ await chumbaq.registerPushToken({ token, platform: 'web', provider: 'fcm' });
 In your service worker, report delivery and clicks with
 `reportPushReceived(data)` and `reportPushClicked(data)`.
 
+### Get the web push token
+
+Chumbaq sends web push through Firebase Cloud Messaging, so the token comes
+from the Firebase JS SDK. The Chumbaq SDK does not fetch it for you.
+
+1. Install Firebase next to the SDK:
+
+   ```sh
+   npm install firebase
+   ```
+
+2. In the [Firebase console](https://console.firebase.google.com), open
+   **Project settings**:
+   - **General → Your apps**: add a web app and copy its `firebaseConfig`.
+   - **Cloud Messaging → Web configuration → Web Push certificates**: click
+     **Generate key pair** and copy the public key. That is your VAPID key.
+
+3. On the page, ask for permission, get the token and register it. Browsers
+   (Safari in particular) only show the permission prompt after a user
+   action, so call this from a click handler:
+
+   ```ts
+   import { initializeApp } from 'firebase/app';
+   import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
+   import { Chumbaq } from '@chumbaq/sdk';
+
+   const chumbaq = new Chumbaq({ baseUrl, apiKey, projectId });
+   await chumbaq.init();
+
+   const app = initializeApp(firebaseConfig);
+
+   async function enablePush() {
+     if (!(await isSupported())) return;
+     if ((await Notification.requestPermission()) !== 'granted') return;
+
+     const messaging = getMessaging(app);
+     const token = await getToken(messaging, { vapidKey: 'YOUR_VAPID_KEY' });
+     await chumbaq.registerPushToken({ token, platform: 'web', provider: 'fcm' });
+
+     // A push that arrives while a tab is open and visible goes here, not to
+     // the service worker, and Firebase does not show it.
+     onMessage(messaging, (payload) => chumbaq.reportPushReceived(payload.data ?? {}));
+   }
+   ```
+
+   `getToken` registers the service worker at `/firebase-messaging-sw.js`,
+   so serve the file below from your site root.
+
+4. The service worker. It imports npm packages, so bundle it with your build
+   tool (for example `esbuild sw.js --bundle --outfile=public/firebase-messaging-sw.js`):
+
+   ```js
+   // sw.js, bundled to /firebase-messaging-sw.js
+   import { initializeApp } from 'firebase/app';
+   import { getMessaging, onBackgroundMessage } from 'firebase/messaging/sw';
+   import { Chumbaq } from '@chumbaq/sdk';
+
+   // Do not call init() here: a worker builds the SDK only to report.
+   const chumbaq = new Chumbaq({ baseUrl, apiKey, projectId });
+
+   // Add this before getMessaging(): Firebase's own click listener stops
+   // the event from reaching listeners added after it.
+   self.addEventListener('notificationclick', (event) => {
+     const data = event.notification.data?.FCM_MSG?.data ?? {};
+     event.waitUntil(chumbaq.reportPushClicked(data));
+   });
+
+   const messaging = getMessaging(initializeApp(firebaseConfig));
+
+   // Firebase shows the notification itself, so only report it here.
+   onBackgroundMessage(messaging, (payload) => chumbaq.reportPushReceived(payload.data ?? {}));
+   ```
+
+   Firebase also opens the campaign's deep link on click, so the worker
+   ignores the URL `reportPushClicked` returns. `FCM_MSG` is where Firebase
+   keeps the original message on a notification it showed.
+
+The worker reports under the device id the page saved during `init()`, which
+is why the page calls `init()` before registering the token. Call `chumbaq.unregisterPushToken(token)` when the user turns push off.
+
 ## Privacy: consent, do-not-track, deletion and export
 
 These controls help you comply with India's DPDP Act. Consent travels with
