@@ -3,6 +3,47 @@
 `@chumbaq/sdk` — the web SDK for [Chumbaq](https://chumbaq.com): events,
 identity, deferred deep links, web push, banners and in-app messages.
 
+## First push in 10 minutes
+
+For a website that has never used Chumbaq. Web push goes through Firebase
+Cloud Messaging, so you also need a Firebase project.
+
+**1. Create a project.** In the Chumbaq dashboard, create a project and copy
+its project ID and its SDK (project API) key. Under Push Notifications →
+Settings, upload your Firebase project's service account key.
+
+**2. Install the package.**
+
+```sh
+npm install @chumbaq/sdk
+```
+
+**3. Initialise the SDK.** Call this early on every page:
+
+```ts
+import { Chumbaq } from '@chumbaq/sdk';
+
+const chumbaq = new Chumbaq({
+  baseUrl: 'https://your-chumbaq-host',
+  apiKey: '<SDK key>',
+  projectId: '<project id>',
+});
+await chumbaq.init();
+```
+
+**4. Get the web push token.** Follow [Get the web push token](#get-the-web-push-token):
+it asks for permission, gets the token from Firebase, calls
+`chumbaq.registerPushToken`, and sets up the service worker. Log the token
+once; you need it in step 6.
+
+**5. Identify the user.** Call `chumbaq.identify` with `externalUserId` and a
+`userHash` made on your server. See [Identity verification](#identity-verification)
+for the call and how to make the hash.
+
+**6. Send a test push.** In the dashboard, open Push Notifications → Settings
+tab → Test send, paste the token and send. If nothing arrives, pass
+`debug: true` to `new Chumbaq(...)` and check the browser console.
+
 ## Installation
 
 ```sh
